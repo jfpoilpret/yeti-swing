@@ -1,0 +1,127 @@
+module widgets;
+
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import javax.swing.ButtonGroup;
+import javax.swing.DefaultComboBoxModel;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JRadioButton;
+import javax.swing.JTextField;
+import javax.swing.ListSelectionModel;
+
+load events;
+
+// Factories for common widgets (with some private helper functions)
+//-------------------------------------------------------------------
+
+_button option = (f b is ~JButton -> () =
+	case option of
+		Name name: b#setName(name);
+		_: ();
+	esac;f);
+
+button text action options =
+	(b = new JButton();
+	 b#setText(text);
+	 for (map _button options) (b |>);
+	 b#addActionListener(_actionListener action);
+	 b);
+
+_textfield option = (f tf is ~JTextField -> () =
+	case option of
+		Name name: tf#setName(name);
+		Columns columns: tf#setColumns(columns);
+		_: ();
+	esac;f);
+
+textfield text options = 
+	(tf = new JTextField();
+	 tf#setText(text);
+	 for (map _textfield options) (tf |>);
+	 tf);
+
+_label option = (f lb is ~JLabel -> () =
+	case option of
+		Name name: lb#setName(name);
+		LabelFor component: lb#setLabelFor(component as ~JComponent);
+		_: ();
+	esac;f);
+
+label text options =
+	(lb = new JLabel();
+	 lb#setText(text);
+	 for (map _label options) (lb |>);
+	 lb);
+
+_checkbox option = (f cb is ~JCheckBox -> () =
+	case option of
+		Name name: cb#setName(name);
+		Selected selected: cb#setSelected(selected);
+		_: ();
+	esac;f);
+
+checkbox text options =
+	(cb = new JCheckBox();
+	 cb#setText(text);
+	 for (map _checkbox options) (cb |>);
+	 cb);
+
+_radiobutton option = (f rb is ~JRadioButton -> () =
+	case option of
+		Name name: rb#setName(name);
+		Selected selected: rb#setSelected(selected);
+		_: ();
+	esac;f);
+
+radiobutton text options =
+	(rb = new JRadioButton();
+	 rb#setText(text);
+	 for (map _radiobutton options) (rb |>);
+	 rb);
+
+buttongroup bs =
+	(bg = new ButtonGroup();
+	 for bs (_ b = bg#add(b));
+	 bg);
+	
+_combobox option = (f cb is ~JComboBox -> () =
+	case option of
+		Name name: cb#setName(name);
+		Values values: cb#setModel(new DefaultComboBoxModel(array values));
+		SelectedItem item: cb#setSelectedItem(item);
+		SelectedIndex index: cb#setSelectedIndex(index);
+		_: ();
+	esac;f);
+
+combobox options =
+	(cb = new JComboBox();
+	 for (map _combobox options) (cb |>);
+	 cb);
+
+_listSelectionMode mode =
+	case mode of
+		Single (): ListSelectionModel#SINGLE_SELECTION;
+		Multiple (): ListSelectionModel#MULTIPLE_INTERVAL_SELECTION
+	esac;
+	
+_listbox option = (f lb is ~JList -> () =
+	case option of
+		Name name: lb#setName(name);
+		Values values: lb#setListData(array values);
+		SelectionMode mode: lb#setSelectionMode(_listSelectionMode mode);
+		SelectedIndex index: lb#setSelectedIndex(index);
+		SelectedIndices indices: lb#setSelectedIndices(array indices);
+		_: ();
+	esac;f);
+
+listbox options =
+	(lb = new JList();
+	 for (map _listbox options) (lb |>);
+	 lb);
+
+{button, textfield, label, checkbox, combobox, listbox}

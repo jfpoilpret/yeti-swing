@@ -1,0 +1,127 @@
+module dialog;
+
+// to use this module, designgridlayout library must be in the classpath
+// in the REPL, you must:
+// > java -cp designgridlayout-1.9.jar;yeti.jar yeti.lang.compiler.yeti
+
+import javax.swing.JComponent;
+import javax.swing.JDialog;
+import javax.swing.JFrame;
+
+import net.java.dev.designgridlayout.DesignGridLayout;
+import net.java.dev.designgridlayout.Tag;
+
+asDefault options is list<'a> -> AsDefault list<'a> = AsDefault options;
+asRadio options is list<'a> -> AsRadio list<'a> = AsRadio options;
+asCombo options is list<'a> -> AsCombo list<'a> = AsCombo options;
+asList options is list<'a> -> AsList list<'a> = AsList options;
+
+// standard mapping 			with specific options
+// boolean	-> JCheckBox		-> JRadioButton, JComboBox
+// string	-> JTextField		-> JComboBox, JList, JRadioButton
+// number	-> JTextField		-> ?
+// list		-> JList			-> none
+// Some 'a	-> same as above, but optional
+
+import yeti.lang.AList;
+import yeti.lang.Fun;
+import yeti.lang.Struct;
+
+_toStruct st is 'a -> ~Struct =
+	if st as ~Object instanceof Struct then
+		st as ~Object unsafely_as ~Struct
+	else
+		failWith "Struct expected!"
+	fi;
+	
+_allFieldNames st =
+	(st' = _toStruct st;
+	 map (_ field = st'#name(field)) [0 .. st'#count()]);
+
+_fieldValue st name is 'a -> string -> 'b =
+	(_toStruct st)#get(name);
+
+_fieldOptions st name is 'a -> string -> 'b =
+	(opts = _fieldValue st name;
+	 if opts instanceof AList then
+		 opts' = opts unsafely_as list<'a>;
+		 opt1 = head opts';
+		 if opt1 as ~Object instanceof yeti.lang.Tag then opts' else [] fi
+	 else
+		 []
+	 fi);
+
+//FIXME: how can we use that to convey an initial None value?
+//_some x force _ = if force then Some x else None () fi;
+//some x = _some x true;
+//none x = _some x false;
+
+some x _ = if true then Some x else None () fi;
+//none x _ = if false then Some x else None x fi;
+
+// check if a Fun object is an instance of (some x)
+_isSome o is ~Object -> (Some 'a | None ()) = 
+	if o instanceof Fun then
+		try
+			case peekObject (o unsafely_as ~Fun)#apply(() as ~Object) of
+				Variant {tag = "Some", value}: Some value;
+				_ : none
+			esac
+		catch Exception:
+			// "some" function should never throw exception, thus this is not it
+			none
+		yrt
+	else
+		none
+	fi;
+
+//TODO combine type of value with options: quite many combinations!
+//TODO try to find a better way to provide this mapping (hash?)
+_widgetFactory value options =
+	case value of
+		String s:		textfield s options;
+		Number n:		textfield (string n) options;
+		Boolean b:		checkbox "" options;
+		List []:		listbox options;
+		List (x::xs):	listbox options;
+		Object o:		case _isSome o of
+							Some val: _widgetFactory val options;
+							_ : () as ~JComponent
+						esac;
+		_ :				() as ~JComponent
+	esac;
+
+_prepareRow initial options optionNames name =
+	{
+		name,
+		value = _fieldValue initial name,
+		opts = if contains? name optionNames then _fieldOptions options name else [] fi
+	};	
+
+_buildRow {name, value, opts} =
+	(widget = _widgetFactory (peekObject value) opts;
+	 {widget, label = label name [LabelFor widget]});
+
+dialog title initial options is string -> 'a -> 'b -> (Some 'a | None ()) =
+	(// Check initial and options are Struct
+	 names = _allFieldNames initial;
+	 optionNames = _allFieldNames options;
+	 // Create all widgets with their labels
+	 rows = names |> map (_prepareRow initial options optionNames) |> map _buildRow;
+	 // Create dialog
+	 dialog = new JDialog(() as ~JFrame, title, true);
+	 dialog#setDefaultCloseOperation(JDialog#DISPOSE_ON_CLOSE);
+	 // layout all widgets
+	 layout = new DesignGridLayout(dialog);
+	 for rows (_ row = (_ = layout#row()#grid(row.label)#add(row.widget, 1)));
+	 // add cancel and OK buttons
+	 cancel = button "Cancel" (\dialog#setVisible(false)) [];
+//	 apply () = 
+	 ok = button "OK" (\dialog#setVisible(false)) [];
+	 _ = layout#row()#bar()#add(cancel, Tag#CANCEL)#add(ok, Tag#OK);
+	 // show dialog (modal)
+	 // check button OK or Cancel
+	 // if OK, convert widgets to fields in new struct
+	 Some initial);
+
+{dialog, some, asDefault, asRadio, asCombo, asList}

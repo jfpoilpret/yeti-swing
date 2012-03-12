@@ -1,0 +1,103 @@
+module guiconsole;
+
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.LinkedBlockingQueue;
+import javax.swing.ImageIcon;
+import javax.swing.JFrame;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+
+import yeti.lang.AList;
+
+class KeyQueue extends KeyAdapter
+	keys = new LinkedBlockingQueue(),
+	number popKey() keys#take() unsafely_as number,
+	void keyPressed(KeyEvent e) keys#put(e#getKeyCode()),
+	void stop() keys#put(KeyEvent#VK_ESCAPE),
+end;
+
+class Closer(KeyQueue queue) extends WindowAdapter
+	void windowClosing(WindowEvent e) queue#stop(),
+end;
+
+class Pane(int w, int h, Map icons) extends JPanel
+	var content = [""],
+	
+	drawIcon g x y icon is ~Graphics -> number -> number -> ~ImageIcon -> () =
+		icon#paintIcon(() as ~Component, g, x * w, y * h),
+	drawLine g y line is ~Graphics -> number -> string -> () = 
+		for [0..strLength line - 1]
+			(_ i = drawIcon g i y (icons#get(strChar line i) unsafely_as ~ImageIcon)),
+	drawLines g y lines =
+		if not empty? lines then drawLine g y (head lines);drawLines g (y+1) (tail lines) fi,
+
+	void size(int width, int height)
+		dim = new Dimension(w * width, h * height);
+		this#setMinimumSize(dim);
+		this#setPreferredSize(dim);
+		this#setMaximumSize(dim);
+		this#invalidate(),
+	void printContent(AList newContent)
+		content := if nullptr? newContent then [""] else newContent unsafely_as list<string> fi;
+		this#repaint(),
+	void paintComponent(Graphics g)
+		super#paintComponent(g);
+		drawLines g 0 content,
+end;
+
+typedef t_console =
+{
+	title is string -> (),
+	size is number -> number -> (),
+	clear is () -> (),
+	print is list?<string> -> (),
+	getch is () -> number,
+	close is () -> (),
+	infoBox is string -> (),
+	confirmBox is string -> boolean,
+};
+
+loadIcon name is string -> ~ImageIcon = new ImageIcon(name);
+
+//FIXME problem with accented characters in input strings of message box?
+//TODO allow fix size and fill in with space icon
+console width height mapIcons is number -> number -> hash<string, string> -> t_console =
+	(icons is hash<string, ~ImageIcon> = [:];
+	 forHash mapIcons (_ k v = (icons.[k] := loadIcon v));
+	 w = mapHash (_ k v = (v as ~Object unsafely_as ~ImageIcon)#getIconWidth()) icons |> fold max 0;
+	 h = mapHash (_ k v = (v as ~Object unsafely_as ~ImageIcon)#getIconHeight()) icons |> fold max 0;
+
+	 keyQueue = new KeyQueue();
+	 closer = new Closer(keyQueue);
+	 frame = new JFrame();
+	 frame#addKeyListener(keyQueue);
+	 frame#addWindowListener(closer);
+	 pane = new Pane(w, h, icons);
+	 pane#addKeyListener(keyQueue);
+	 pane#size(width, height);
+	 frame#add(pane);
+	 frame#pack();
+	 frame#setDefaultCloseOperation(JFrame#DO_NOTHING_ON_CLOSE);
+	 frame#setLocationRelativeTo(() as ~Component);
+	 frame#setVisible(true);
+	 {
+		 title t = frame#setTitle(t),
+		 size width height = pane#size(width, height); frame#pack(),
+		 clear () = pane#printContent([]),
+		 print lines = pane#printContent(lines as ~Object unsafely_as ~AList),
+		 getch () = number (string keyQueue#popKey()),
+		 close () = frame#dispose(),
+		 
+		 infoBox msg = JOptionPane#showMessageDialog(frame, msg),
+		 confirmBox msg = JOptionPane#showConfirmDialog(frame, msg) == JOptionPane#YES_OPTION,
+	 });
+
+{console}
